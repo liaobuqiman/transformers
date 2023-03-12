@@ -24,9 +24,13 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.utils.checkpoint
+from packaging import version
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
+from FakeRoast.FakeRoast import FakeRoastEmbedding
+from FakeRoast.FakeRoast import FakeRoastLinear
 
+import pdb
 from ...activations import ACT2FN
 from ...modeling_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
@@ -182,9 +186,45 @@ class BertEmbeddings(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
-        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
-        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+        if config.FakeRoast:
+            self.word_embeddings = FakeRoastEmbedding(num_embeddings=config.num_embeddings,
+                                                    embedding_dim=config.embedding_dim,
+                                                    is_global=config.is_global,
+                                                    weight=config.weight,
+                                                    init_scale=config.init_scale,
+                                                    compression=config.compression,
+                                                    padding_idx=config.padding_idx,
+                                                    max_norm=config.max_norm,
+                                                    norm_type=2.0,
+                                                    scale_grad_by_freq=False,
+                                                    sparse=False)
+            self.position_embeddings = FakeRoastEmbedding(num_embeddings=config.num_embeddings,
+                                                    embedding_dim=config.embedding_dim,
+                                                    is_global=config.is_global,
+                                                    weight=config.weight,
+                                                    init_scale=config.init_scale,
+                                                    compression=config.compression,
+                                                    padding_idx=config.padding_idx,
+                                                    max_norm=config.max_norm,
+                                                    norm_type=2.0,
+                                                    scale_grad_by_freq=False,
+                                                    sparse=False)
+            self.token_type_embeddings = FakeRoastEmbedding(num_embeddings=config.num_embeddings,
+                                                    embedding_dim=config.embedding_dim,
+                                                    is_global=config.is_global,
+                                                    weight=config.weight,
+                                                    init_scale=config.init_scale,
+                                                    compression=config.compression,
+                                                    padding_idx=config.padding_idx,
+                                                    max_norm=config.max_norm,
+                                                    norm_type=2.0,
+                                                    scale_grad_by_freq=False,
+                                                    sparse=False)
+            
+        else:
+            self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
+            self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+            self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
@@ -251,10 +291,38 @@ class BertSelfAttention(nn.Module):
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
-
-        self.query = nn.Linear(config.hidden_size, self.all_head_size)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size)
+        if config.FakeRoast:
+            self.query = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+            self.key = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+            self.value = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+            self.query = nn.Linear(config.hidden_size, self.all_head_size)
+            self.key = nn.Linear(config.hidden_size, self.all_head_size)
+            self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = position_embedding_type or getattr(
@@ -376,7 +444,18 @@ class BertSelfAttention(nn.Module):
 class BertSelfOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        if config.FakeRoast:
+             self.dense = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -439,7 +518,18 @@ class BertAttention(nn.Module):
 class BertIntermediate(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+        if config.FakeRoast:
+            self.dense = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:    
+            self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -454,7 +544,18 @@ class BertIntermediate(nn.Module):
 class BertOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        if config.FakeRoast:
+            self.dense = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+            self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -652,7 +753,18 @@ class BertEncoder(nn.Module):
 class BertPooler(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        if config.FakeRoast:
+            self.dense = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.activation = nn.Tanh()
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
@@ -667,7 +779,18 @@ class BertPooler(nn.Module):
 class BertPredictionHeadTransform(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        if config.FakeRoast:
+            self.dense = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         if isinstance(config.hidden_act, str):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -688,7 +811,19 @@ class BertLMPredictionHead(nn.Module):
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
-        self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        if config.FakeRoast:
+            self.decoder = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+
+            self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
         self.bias = nn.Parameter(torch.zeros(config.vocab_size))
 
@@ -1057,7 +1192,7 @@ class BertForPreTraining(BertPreTrainedModel):
 
     def __init__(self, config):
         super().__init__(config)
-
+        #Notice: add a exit for non_fakeRost in future
         self.bert = BertModel(config)
         self.cls = BertPreTrainingHeads(config)
 

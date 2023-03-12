@@ -176,6 +176,24 @@ class BertConfig(PretrainedConfig):
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
 
+        self.num_embeddings = 100
+
+        # FakeRoastEmbedding      
+        self.FakeRoast = 0
+        self.num_embeddings = 0
+        self.is_global = 0
+        self.weight = 0
+        self.init_scale = 0
+        self.compression = 0
+        self.padding_idx = 0
+        self.max_norm = 0
+         # FakeRoastLinear
+        self.input = 0
+        self.output = 0
+        self.weight = 0
+        self.matrix_mode = 0
+        self.seed = 0
+
 
 class BertOnnxConfig(OnnxConfig):
     @property
