@@ -36,7 +36,7 @@ from ...utils import (
     replace_return_docstrings,
 )
 from .configuration_vit import ViTConfig
-
+from roast.FakeRoast import *
 
 logger = logging.get_logger(__name__)
 
@@ -157,8 +157,25 @@ class ViTPatchEmbeddings(nn.Module):
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.num_patches = num_patches
-
-        self.projection = nn.Conv2d(num_channels, hidden_size, kernel_size=patch_size, stride=patch_size)
+        if config.FakeRoast:
+            self.projecion  = FakeRoastConv2d(  in_channels=config.in_channels,
+                                                out_channels=config.out_channels,
+                                                kernel_size=config.kernel_size,
+                                                is_global=False,
+                                                weight=None,
+                                                init_scale=None,
+                                                compression=None,
+                                                stride=1,
+                                                padding=0,
+                                                dilation=1,
+                                                groups=1, 
+                                                bias=True,
+                                                padding_mode='zeros',
+                                                test=False,
+                                                matrix_mode="random",
+                                                seed = 2023)
+        else:
+            self.projection = nn.Conv2d(num_channels, hidden_size, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, pixel_values: torch.Tensor, interpolate_pos_encoding: bool = False) -> torch.Tensor:
         batch_size, num_channels, height, width = pixel_values.shape
@@ -188,10 +205,39 @@ class ViTSelfAttention(nn.Module):
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
-
-        self.query = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
+        
+        if config.fakeroast:
+            self.query = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+            self.key = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+            self.value = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+            self.query = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
+            self.key = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
+            self.value = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
@@ -244,7 +290,18 @@ class ViTSelfOutput(nn.Module):
 
     def __init__(self, config: ViTConfig) -> None:
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        if config.fakeroast:
+            self.dense = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
@@ -296,7 +353,18 @@ class ViTAttention(nn.Module):
 class ViTIntermediate(nn.Module):
     def __init__(self, config: ViTConfig) -> None:
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+        if config.fakeroast:
+            self.dense = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -312,7 +380,18 @@ class ViTIntermediate(nn.Module):
 class ViTOutput(nn.Module):
     def __init__(self, config: ViTConfig) -> None:
         super().__init__()
-        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        if config.fakeroast:
+            self.dense = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else: 
+            self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
@@ -600,7 +679,18 @@ class ViTModel(ViTPreTrainedModel):
 class ViTPooler(nn.Module):
     def __init__(self, config: ViTConfig):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        if config.fakeroast:
+            self.dense = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.activation = nn.Tanh()
 
     def forward(self, hidden_states):
@@ -629,15 +719,36 @@ class ViTForMaskedImageModeling(ViTPreTrainedModel):
         super().__init__(config)
 
         self.vit = ViTModel(config, add_pooling_layer=False, use_mask_token=True)
-
-        self.decoder = nn.Sequential(
-            nn.Conv2d(
-                in_channels=config.hidden_size,
-                out_channels=config.encoder_stride**2 * config.num_channels,
-                kernel_size=1,
-            ),
-            nn.PixelShuffle(config.encoder_stride),
-        )
+        if config.fakeroast:
+            self.decoder = nn.Sequential(
+                FakeRoastConv2d( in_channels=config.in_channels,
+                                out_channels=config.out_channels,
+                                kernel_size=config.kernel_size,
+                                is_global=False,
+                                weight=None,
+                                init_scale=None,
+                                compression=None,
+                                stride=1,
+                                padding=0,
+                                dilation=1,
+                                groups=1, 
+                                bias=True,
+                                padding_mode='zeros',
+                                test=False,
+                                matrix_mode="random",
+                                seed = 2023
+                     ),
+                nn.PixelShuffle(config.encoder_stride),
+            )
+        else:
+            self.decoder = nn.Sequential(
+                nn.Conv2d(
+                    in_channels=config.hidden_size,
+                    out_channels=config.encoder_stride**2 * config.num_channels,
+                    kernel_size=1,
+                ),
+                nn.PixelShuffle(config.encoder_stride),
+            )
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -754,7 +865,18 @@ class ViTForImageClassification(ViTPreTrainedModel):
         self.vit = ViTModel(config, add_pooling_layer=False)
 
         # Classifier head
-        self.classifier = nn.Linear(config.hidden_size, config.num_labels) if config.num_labels > 0 else nn.Identity()
+        if config.fakeroast:
+            self.classifier = FakeRoastLinear(input=config.input,
+                                        output=config.output,
+                                        bias=True,
+                                        is_global=False,
+                                        weight=None,
+                                        init_scale=None,
+                                        compression= config.weight,
+                                        matrix_mode=config.matrix_mode,
+                                        seed=config.seed)if config.num_labels > 0 else nn.Identity()
+        else:
+            self.classifier = nn.Linear(config.hidden_size, config.num_labels) if config.num_labels > 0 else nn.Identity()
 
         # Initialize weights and apply final processing
         self.post_init()
