@@ -27,8 +27,7 @@ import torch.utils.checkpoint
 from packaging import version
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
-from FakeRoast.FakeRoast import FakeRoastEmbedding
-from FakeRoast.FakeRoast import FakeRoastLinear
+from transformers.FakeRoast.FakeRoast import *
 
 import pdb
 from ...activations import ACT2FN
